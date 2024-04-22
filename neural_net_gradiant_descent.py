@@ -1,99 +1,37 @@
-"""
-This script presents a simple neural network created with numpy.
-The task is to implement the backpropagation algorithm to train
-the network to learn the XOR function. The backpropagation algorithm
-is based on gradient descent.
-
-Description:
-The XOR function is a binary operation that outputs true when the number
-of true inputs is odd. The truth table for XOR is as follows:
-
-| x1 | x2 | y |
-|----|----|---|
-| 0  | 0  | 0 |
-| 0  | 1  | 1 |
-| 1  | 0  | 1 |
-| 1  | 1  | 0 |
-
-Created on Wed April 17 17:07:12 2024
-@author: Juan Andrés Méndez Galvis
-"""
-
+import matplotlib.pyplot as plt
 import numpy as np
 
 
-def sigmoid(x):
+def tanh(x):
     """
-    Sigmoid activation function
-    Parameters:
-        x: float
-    Returns:
-        float
+    Hyperbolic tangent activation function
     """
-    return 1 / (1 + np.exp(-x))
+    return np.tanh(x)
 
 
-def sigmoid_prime(x):
+def tanh_prime(x):
     """
-    Derivative of the sigmoid activation function
-    Parameters:
-        x: float
-    Returns:
-        float
+    Derivative of the hyperbolic tangent activation function
     """
-    return sigmoid(x) * (1 - sigmoid(x))
+    return 1.0 - np.tanh(x) ** 2
 
 
-def initialize_weights_xavier(n_in, n_out):
+def initialize_weights_glorot(n_in, n_out):
     """
-    Initialize weights using the Xavier initialization
-    Description:
-    The Xavier initialization is a technique that helps to initialize
-    the weights of the neural network in a way that the variance of the
-    output of each layer is the same as the variance of the input.
-    Parameters:
-        n_in: int
-        n_out: int
-    Returns:
-        numpy.ndarray
+    Xavier Glorot weight initialization
     """
-    return np.random.randn(n_out, n_in) * np.sqrt(1.0 / n_in)
+    limit = np.sqrt(6 / (n_in + n_out))
+    return np.random.uniform(-limit, limit, (n_out, n_in))
 
 
 class NeuralNetwork:
     """
-    Neural Network class
-    Description:
-    This class implements a simple neural network with one hidden layer.
-    The network uses the sigmoid activation function for the hidden layer
-    and the output layer. The network is trained using the backpropagation
-    algorithm with gradient descent.
-    Parameters:
-        layer_sizes: list
-        activation: str
-
-    Methods:
-        activation(x): float
-        activation_prime(x): float
-        feedforward(a): float
-        backpropagation(x, y): tuple
-        gradient_descent(mini_batch, eta, mu): None
-        cost_derivative(output_activations, y): float
-        train(training_data, epochs, mini_batch_size, learning_rate, decay): None
-
-    Attributes:
-        weights: list
-        biases: list
-        velocity_b: list
-        velocity_w: list
+    A simple feedforward neural network with n hidden layers
     """
 
     def __init__(self, layer_sizes):
-        """
-        Initialize the neural network
-        """
         self.weights = [
-            initialize_weights_xavier(x, y)
+            initialize_weights_glorot(x, y)
             for x, y in zip(layer_sizes[:-1], layer_sizes[1:])
         ]
         self.biases = [np.random.randn(y, 1) for y in layer_sizes[1:]]
@@ -102,79 +40,85 @@ class NeuralNetwork:
 
     def feedforward(self, a):
         """
-        Feedforward pass
-        Description:
-        This method computes the feedforward pass of the neural network
-        Parameters:
-            a: numpy.ndarray
-        Returns:
-            numpy.ndarray
+        Return the output of the network if 'a' is input.
         """
         activations = [a]
         for b, w in zip(self.biases, self.weights):
             z = np.dot(w, activations[-1]) + b
-            a = sigmoid(z)
+            a = tanh(z)
             activations.append(a)
         return activations[-1]
 
     def backpropagation(self, x, y):
         """
-        Backpropagation algorithm
-        Description:
-        This method computes the backpropagation algorithm to train the
-        neural network
-        Parameters:
-            x: numpy.ndarray
-            y: numpy.ndarray
-        Returns:
-            tuple
+        Return a tuple of gradients for the cost function with respect to biases and weights
         """
-        # @TODO: Implement the backpropagation algorithm
+        grad_b = [np.zeros(b.shape) for b in self.biases]
+        grad_w = [np.zeros(w.shape) for w in self.weights]
+        activation = x
+        activations = [x]
+        zs = []
+        for b, w in zip(self.biases, self.weights):
+            z = np.dot(w, activation) + b
+            zs.append(z)
+            activation = tanh(z)
+            activations.append(activation)
+
+        delta = self.cost_derivative(activations[-1], y) * tanh_prime(zs[-1])
+        grad_b[-1] = delta
+        grad_w[-1] = np.dot(delta, activations[-2].T)
+
+        for l in range(2, len(self.biases) + 1):
+            z = zs[-l]
+            sp = tanh_prime(z)
+            delta = np.dot(self.weights[-l + 1].T, delta) * sp
+            grad_b[-l] = delta
+            grad_w[-l] = np.dot(delta, activations[-l - 1].T)
+
+        return (grad_b, grad_w)
 
     def gradient_descent(self, mini_batch, eta, mu=0.9):
         """
-        Gradient descent algorithm
-        Description:
-        This method computes the gradient descent algorithm to train the
-        neural network
-        Parameters:
-            mini_batch: list
-            eta: float
-            mu: float
-        Returns:
-            None
+        Update the network's weights and biases by applying gradient descent using backpropagation to a single mini batch.
         """
-        # @TODO: Implement the gradient descent algorithm
+        # @TODO: Implement momentum
+        pass
 
     def cost_derivative(self, output_activations, y):
         """
-        Cost derivative
-        Description:
-        This method computes the derivative of the cost function
-        Parameters:
-            output_activations: numpy.ndarray
-            y: numpy.ndarray
-        Returns:
-            numpy.ndarray
+        Return the vector of partial derivatives
         """
         return output_activations - y
 
-    def train(self, training_data, epochs, mini_batch_size, learning_rate, decay):
+    def update_learning_rate(
+        self, epoch, initial_lr, schedule_type="step_decay", decay=0.1, drop_every=1000
+    ):
         """
-        Train the neural network
-        Description:
-        This method trains the neural network using the backpropagation
-        algorithm with gradient descent
-        Parameters:
-            training_data: list
-            epochs: int
-            mini_batch_size: int
-            learning_rate: float
-            decay: float
-        Returns:
-            None
+        Update the learning rate according to the specified schedule
+        """
+        if schedule_type == "step_decay":
+            return initial_lr * (decay ** np.floor(epoch / drop_every))
+        elif schedule_type == "exp_decay":
+            return initial_lr * np.exp(-decay * epoch)
+        elif schedule_type == "inv_scaling":
+            return initial_lr / (1 + decay * epoch)
+        else:
+            return initial_lr
+
+    def train(
+        self,
+        training_data,
+        epochs,
+        mini_batch_size,
+        learning_rate,
+        decay,
+        schedule_type="step_decay",
+    ):
+        """
+        Train the neural network using mini-batch stochastic gradient descent.
         """
         n = len(training_data)
+        loss_history = []
         for j in range(epochs):
             np.random.shuffle(training_data)
             mini_batches = [
@@ -183,40 +127,75 @@ class NeuralNetwork:
             ]
             for mini_batch in mini_batches:
                 self.gradient_descent(mini_batch, learning_rate)
-            learning_rate *= decay
-            if j % 100 == 0:
-                losses = [
-                    self.cost_derivative(self.feedforward(x), y) ** 2
-                    for x, y in training_data
-                ]
-                print(f"Epoch {j}, Loss: {np.mean(losses)}")
+            learning_rate = self.update_learning_rate(
+                j, learning_rate, schedule_type, decay
+            )
+            current_loss = np.mean(
+                [(self.feedforward(x) - y) ** 2 for x, y in training_data]
+            )
+            loss_history.append(current_loss)
+        return loss_history
 
 
 def main():
     """
-    Main function
-    Description:
-    This function creates a neural network with one hidden layer and trains
-    the network to learn the XOR function
+    Train a neural network to approximate the sin function
     """
+    x = np.arange(0, 2 * np.pi, 0.01)
+    y = np.sin(x)
     training_data = [
-        (np.array([[0], [0]]), np.array([[0]])),
-        (np.array([[0], [1]]), np.array([[1]])),
-        (np.array([[1], [0]]), np.array([[1]])),
-        (np.array([[1], [1]]), np.array([[0]])),
+        (np.array([i]).reshape(1, 1), np.array([j]).reshape(1, 1)) for i, j in zip(x, y)
     ]
-    nn = NeuralNetwork([2, 2, 1])
-    nn.train(
-        training_data,
-        epochs=20000,
-        mini_batch_size=4,
-        learning_rate=0.1,
-        decay=0.9999,
+
+    # Initialize the neural network
+    nn = NeuralNetwork([1, 5, 1])
+
+    # Plot predictions before training
+    initial_predictions = [nn.feedforward(np.array([[i]])) for i in x]
+    plt.figure(figsize=(21, 7))
+    plt.subplot(1, 3, 1)
+    plt.plot(x, y, label="True Sin(x)")
+    plt.plot(
+        x,
+        [p[0, 0] for p in initial_predictions],
+        label="Initial NN Predictions",
+        linestyle="--",
     )
-    for x, y in training_data:
-        print(
-            f"Input: {x.flatten()} Output: {nn.feedforward(x).flatten()} Target: {y.flatten()}"
-        )
+    plt.title("Before Training")
+    plt.xlabel("Input (x)")
+    plt.ylabel("Output (Sin(x))")
+    plt.legend()
+    plt.grid(True)
+
+    # Train the network and get loss history
+    loss_history = nn.train(training_data, 2000, 10, 0.05, 0.005)
+
+    # Plot predictions after training
+    trained_predictions = [nn.feedforward(np.array([[i]])) for i in x]
+    plt.subplot(1, 3, 2)
+    plt.plot(x, y, label="True Sin(x)")
+    plt.plot(
+        x,
+        [p[0, 0] for p in trained_predictions],
+        label="Trained NN Predictions",
+        linestyle="--",
+    )
+    plt.title("After Training")
+    plt.xlabel("Input (x)")
+    plt.legend()
+    plt.grid(True)
+
+    # Plot loss history
+    plt.subplot(1, 3, 3)
+    plt.plot(loss_history, label="Training Loss")
+    plt.title("Loss During Training")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.legend()
+    plt.grid(True)
+
+    plt.tight_layout()
+    plt.show()
 
 
 if __name__ == "__main__":
